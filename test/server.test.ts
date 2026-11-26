@@ -1,10 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { devNull, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 import { connect, type Harness } from "./helpers.js";
+
+// An empty global config keeps the user's git settings out of the tests. Git for Windows
+// cannot read os.devNull (\\.\nul) as a config file, so use a real empty file instead.
+const emptyGitConfig = join(mkdtempSync(join(tmpdir(), "mcp-git-config-")), "gitconfig");
+writeFileSync(emptyGitConfig, "");
 
 let base: string;
 let repo: string;
@@ -12,7 +17,7 @@ let outside: string;
 let h: Harness;
 
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "Ann", GIT_AUTHOR_EMAIL: "ann@example.com", GIT_COMMITTER_NAME: "Ann", GIT_COMMITTER_EMAIL: "ann@example.com", GIT_CONFIG_GLOBAL: devNull } });
+  execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "Ann", GIT_AUTHOR_EMAIL: "ann@example.com", GIT_COMMITTER_NAME: "Ann", GIT_COMMITTER_EMAIL: "ann@example.com", GIT_CONFIG_GLOBAL: emptyGitConfig } });
 const commit = (msg: string) => git(repo, "commit", "-q", "-am", msg);
 
 beforeAll(async () => {
@@ -150,7 +155,7 @@ describe("code_owners", () => {
         GIT_COMMITTER_NAME: who.name,
         GIT_COMMITTER_EMAIL: who.email,
         GIT_COMMITTER_DATE: date,
-        GIT_CONFIG_GLOBAL: devNull,
+        GIT_CONFIG_GLOBAL: emptyGitConfig,
       },
     });
   const ann = { name: "Ann", email: "ann@example.com" };

@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const bin = join(root, "dist", "index.js");
-beforeAll(() => void execFileSync("npx", ["tsup"], { cwd: root, stdio: "ignore" }), 120_000);
+beforeAll(() => void execFileSync("npx", ["tsup"], { cwd: root, stdio: "ignore", shell: process.platform === "win32" }), 120_000);
 
 describe("cli over stdio", () => {
   it("serves this repo's folder and rejects outside roots", async () => {
