@@ -1,7 +1,7 @@
 {
   "name": "@aranshayan/mcp-git-insights",
   "version": "0.1.0",
-  "description": "Read-only Git history and code-archaeology tools for MCP: log, show, diff, blame, changelog and repo summary, restricted to folders you allow.",
+  "description": "Read-only Git history and code-archaeology tools for MCP: log, show, diff, blame, code owners, changelog and repo summary, restricted to folders you allow.",
   "mcpName": "io.github.aranshayan/mcp-git-insights",
   "type": "module",
   "bin": {
