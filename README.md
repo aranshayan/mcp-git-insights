@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/@aranshayan/mcp-git-insights)](https://www.npmjs.com/package/@aranshayan/mcp-git-insights)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Read-only Git history and code archaeology for [MCP](https://modelcontextprotocol.io) clients.** Ask "who changed this and why?", "what shipped since v1.4?", "summarise this branch" — without giving the model a shell.
+**Read-only Git history and code archaeology for [MCP](https://modelcontextprotocol.io) clients.** Ask "who changed this and why?", "who should review this folder?", "what shipped since v1.4?", "summarise this branch" — without giving the model a shell.
 
 - **Cannot modify anything.** Only read commands are ever run, with `--no-ext-diff --no-textconv`, no pager, no prompts, no system config.
 - **Sandboxed to folders you choose.** `--root` (repeatable). Symlinks are resolved, so a link pointing outside the root is refused.
@@ -34,6 +34,7 @@ Claude Code: `claude mcp add git -- npx -y @aranshayan/mcp-git-insights --root "
 | `git_diff` | Between two revisions or working tree; `stat_only` for overview. |
 | `git_blame` | Per-line author/date/commit for up to 200 lines. |
 | `changelog` | Release notes grouped by Conventional Commit type, breaking changes first. |
+| `code_owners` | Who knows a file or folder best: authors ranked by commits and lines changed, with first and last change dates. |
 
 All tools are annotated `readOnlyHint`. Commit messages and file contents are untrusted input for the model.
 

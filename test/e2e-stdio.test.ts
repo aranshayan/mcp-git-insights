@@ -14,7 +14,7 @@ describe("cli over stdio", () => {
     const client = new Client({ name: "e2e", version: "1.0.0" });
     await client.connect(new StdioClientTransport({ command: process.execPath, args: [bin, "--root", root], env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" } }));
     try {
-      expect((await client.listTools()).tools).toHaveLength(6);
+      expect((await client.listTools()).tools).toHaveLength(7);
       const res = await client.callTool({ name: "repo_summary", arguments: { repo: "/" } });
       expect(res.isError).toBe(true);
     } finally {

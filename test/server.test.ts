@@ -49,8 +49,8 @@ const data = async (name: string, args: Record<string, unknown> = {}) => {
 };
 
 describe("tools", () => {
-  it("is read-only and exposes six tools", async () => {
-    expect(await h.toolNames()).toEqual(["changelog", "git_blame", "git_diff", "git_log", "git_show", "repo_summary"]);
+  it("is read-only and exposes seven tools", async () => {
+    expect(await h.toolNames()).toEqual(["changelog", "code_owners", "git_blame", "git_diff", "git_log", "git_show", "repo_summary"]);
     const tools = (await h.client.listTools()).tools;
     expect(tools.every((t) => t.annotations?.readOnlyHint)).toBe(true);
   });
@@ -132,5 +132,79 @@ describe("security", () => {
     expect(r.isError).toBe(true);
     expect(r.text).toMatch(/Not a git repository/);
     await h2.close();
+  });
+});
+
+describe("code_owners", () => {
+  let dir: string;
+  let h3: Harness;
+  const as = (who: { name: string; email: string }, date: string, ...args: string[]) =>
+    execFileSync("git", args, {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: who.name,
+        GIT_AUTHOR_EMAIL: who.email,
+        GIT_AUTHOR_DATE: date,
+        GIT_COMMITTER_NAME: who.name,
+        GIT_COMMITTER_EMAIL: who.email,
+        GIT_COMMITTER_DATE: date,
+        GIT_CONFIG_GLOBAL: "/dev/null",
+      },
+    });
+  const ann = { name: "Ann", email: "ann@example.com" };
+  const annRenamed = { name: "Ann Lee", email: "ANN@example.com" };
+  const bob = { name: "Bob", email: "bob@example.com" };
+  const owners = async (args: Record<string, unknown> = {}) => JSON.parse((await h3.call("code_owners", { repo: dir, ...args })).text);
+
+  beforeAll(async () => {
+    dir = join(base, "owners");
+    mkdirSync(join(dir, "src"), { recursive: true });
+    mkdirSync(join(dir, "docs"));
+    as(ann, "2026-01-01T10:00:00Z", "init", "-q", "-b", "main");
+    writeFileSync(join(dir, "src", "app.ts"), "a\nb\nc\n");
+    writeFileSync(join(dir, "docs", "guide.md"), "x\n");
+    as(ann, "2026-01-01T10:00:00Z", "add", ".");
+    as(ann, "2026-01-01T10:00:00Z", "commit", "-q", "-m", "initial");
+    writeFileSync(join(dir, "src", "app.ts"), "a\nB\nc\nd\n");
+    as(bob, "2026-02-01T10:00:00Z", "commit", "-q", "-am", "bob edits app");
+    writeFileSync(join(dir, "docs", "guide.md"), "x\ny\nz\n");
+    as(bob, "2026-03-01T10:00:00Z", "commit", "-q", "-am", "bob writes docs");
+    writeFileSync(join(dir, "docs", "guide.md"), "x\ny\nz\nw\n");
+    as(bob, "2026-03-02T10:00:00Z", "commit", "-q", "-am", "bob writes more docs");
+    writeFileSync(join(dir, "src", "app.ts"), "a\nB\nc\nd\ne\n");
+    writeFileSync(join(dir, "src", "logo.bin"), Buffer.from([0, 1, 2, 0, 255]));
+    as(annRenamed, "2026-04-01T10:00:00Z", "add", ".");
+    as(annRenamed, "2026-04-01T10:00:00Z", "commit", "-q", "-m", "ann edits app and adds a binary");
+    h3 = await connect(createServer([base]));
+  });
+  afterAll(async () => h3?.close());
+
+  it("ranks authors for a folder and merges one person's name spellings", async () => {
+    const r = await owners({ path: "src" });
+    expect(r).toMatchObject({ path: "src", commitsRead: 3, truncated: false, authorCount: 2 });
+    expect(r.owners[0]).toEqual({ name: "Ann Lee", commits: 2, linesAdded: 4, linesDeleted: 0, firstChange: "2026-01-01", lastChange: "2026-04-01" });
+    expect(r.owners[1]).toEqual({ name: "Bob", commits: 1, linesAdded: 2, linesDeleted: 1, firstChange: "2026-02-01", lastChange: "2026-02-01" });
+    expect(JSON.stringify(r)).not.toContain("@example.com");
+  });
+
+  it("covers the whole repository by default and honours since and limit", async () => {
+    expect((await owners()).owners[0]).toMatchObject({ name: "Bob", commits: 3 });
+    const recent = await owners({ since: "2026-02-15", limit: 1 });
+    expect(recent.authorCount).toBe(2);
+    expect(recent.owners).toHaveLength(1);
+    expect(recent.owners[0]).toMatchObject({ name: "Bob", commits: 2 });
+  });
+
+  it("reports when max_commits stops it early", async () => {
+    const r = await owners({ max_commits: 2 });
+    expect(r).toMatchObject({ commitsRead: 2, truncated: true });
+  });
+
+  it("rejects paths outside the repository and option injection", async () => {
+    expect((await h3.call("code_owners", { repo: dir, path: "../repo/a.txt" })).text).toMatch(/escapes/);
+    expect((await h3.call("code_owners", { repo: dir, rev: "--all" })).isError).toBe(true);
+    expect((await h3.call("code_owners", { repo: dir, since: "--output=/tmp/x" })).isError).toBe(true);
   });
 });

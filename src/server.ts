@@ -177,6 +177,76 @@ export function createServer(roots: string[]): McpServer {
   );
 
   tool(
+    "code_owners",
+    "Code owners",
+    "Who knows a file or folder best: authors ranked by commits and lines changed under a path, with the dates of their first and last change. Merge commits are skipped.",
+    {
+      repo: repoArg,
+      path: z.string().optional().describe("File or folder inside the repository. Defaults to the whole repository."),
+      rev: z.string().default("HEAD").describe("Branch, tag or revision whose history to read."),
+      since: z.string().optional().describe('Only count changes after this date, e.g. "6 months ago" or "2026-01-01".'),
+      limit: z.number().int().min(1).max(50).default(10).describe("Number of authors to return."),
+      max_commits: z.number().int().min(1).max(20_000).default(2000).describe("Newest commits to read before stopping."),
+    },
+    async ({ repo, path, rev, since, limit, max_commits }) => {
+      const dir = await resolveRepo(repo, roots);
+      const maxCommits = max_commits ?? 2000;
+      const args = ["log", `-n${maxCommits}`, "--no-merges", "--numstat", `--format=${RS}%ae${US}%an${US}%aI`, "--no-color"];
+      if (since) args.push(`--since=${assertDate(since, "since")}`);
+      args.push(assertRef(rev ?? "HEAD", "rev"));
+      const rel = path ? await safeRelPath(dir, path) : undefined;
+      if (rel) args.push("--", rel);
+      const out = await runGit(dir, args);
+
+      interface Owner { name: string; commits: number; linesAdded: number; linesDeleted: number; firstChange: string; lastChange: string }
+      // Keyed by email so one person with two spellings of their name counts once.
+      // Emails are only used for grouping and are not returned.
+      const owners = new Map<string, Owner>();
+      let commits = 0;
+      for (const record of out.split(RS)) {
+        const [header, ...stats] = record.split("\n");
+        if (!header?.includes(US)) continue;
+        const [email = "", name = "", date = ""] = header.split(US);
+        const day = date.slice(0, 10);
+        commits++;
+        let added = 0;
+        let deleted = 0;
+        for (const line of stats) {
+          const m = /^(\d+|-)\t(\d+|-)\t/.exec(line);
+          if (!m) continue;
+          // Binary files show "-" instead of line counts.
+          if (m[1] !== "-") added += Number(m[1]);
+          if (m[2] !== "-") deleted += Number(m[2]);
+        }
+        const key = email.toLowerCase() || name;
+        const o = owners.get(key);
+        if (o) {
+          // Log runs newest first, so the first name seen is the most recent one.
+          o.commits++;
+          o.linesAdded += added;
+          o.linesDeleted += deleted;
+          o.firstChange = day;
+        } else {
+          owners.set(key, { name, commits: 1, linesAdded: added, linesDeleted: deleted, firstChange: day, lastChange: day });
+        }
+      }
+      const ranked = [...owners.values()].sort(
+        (a, b) => b.commits - a.commits || b.linesAdded + b.linesDeleted - (a.linesAdded + a.linesDeleted) || b.lastChange.localeCompare(a.lastChange),
+      );
+      return json({
+        path: rel ?? ".",
+        rev: rev ?? "HEAD",
+        ...(since ? { since } : {}),
+        commitsRead: commits,
+        // When the cap is hit, older history was not read and the ranking may favour recent authors.
+        truncated: commits >= maxCommits,
+        authorCount: ranked.length,
+        owners: ranked.slice(0, limit ?? 10),
+      });
+    },
+  );
+
+  tool(
     "changelog",
     "Generate changelog",
     "Group commits between two refs by Conventional Commit type (feat, fix, perf, ...) into Markdown release notes.",
