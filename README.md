@@ -10,7 +10,7 @@
 - **Sandboxed to folders you choose.** `--root` (repeatable). Symlinks are resolved, so a link pointing outside the root is refused.
 - **Injection-proof arguments.** Refs and dates cannot start with `-`; paths go after `--` and must stay inside the repo; free-text filters use the attached `--author=…` form.
 - **Credentials redacted** from remote URLs.
-- Uses your installed `git`. No native dependencies. Node.js 22+.
+- Uses your installed `git`. No native dependencies. Node.js 22+. Tested in CI on Linux, macOS and Windows with Node 22 and 24.
 
 ## Quick start
 
