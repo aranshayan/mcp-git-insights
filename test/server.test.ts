@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
@@ -12,7 +12,7 @@ let outside: string;
 let h: Harness;
 
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "Ann", GIT_AUTHOR_EMAIL: "ann@example.com", GIT_COMMITTER_NAME: "Ann", GIT_COMMITTER_EMAIL: "ann@example.com", GIT_CONFIG_GLOBAL: "/dev/null" } });
+  execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "Ann", GIT_AUTHOR_EMAIL: "ann@example.com", GIT_COMMITTER_NAME: "Ann", GIT_COMMITTER_EMAIL: "ann@example.com", GIT_CONFIG_GLOBAL: devNull } });
 const commit = (msg: string) => git(repo, "commit", "-q", "-am", msg);
 
 beforeAll(async () => {
@@ -35,7 +35,7 @@ beforeAll(async () => {
   git(repo, "remote", "add", "origin", "https://user:token@example.com/x.git");
   git(outside, "init", "-q");
   writeFileSync(join(outside, "secret.txt"), "secret\n");
-  symlinkSync(outside, join(repo, "link"));
+  symlinkSync(outside, join(repo, "link"), process.platform === "win32" ? "junction" : "dir");
   h = await connect(createServer([repo]));
 });
 afterAll(async () => {
@@ -150,7 +150,7 @@ describe("code_owners", () => {
         GIT_COMMITTER_NAME: who.name,
         GIT_COMMITTER_EMAIL: who.email,
         GIT_COMMITTER_DATE: date,
-        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_CONFIG_GLOBAL: devNull,
       },
     });
   const ann = { name: "Ann", email: "ann@example.com" };
