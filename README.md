@@ -37,6 +37,18 @@ Claude Code: `claude mcp add git -- npx -y @aranshayan/mcp-git-insights --root "
 
 All tools are annotated `readOnlyHint`. Commit messages and file contents are untrusted input for the model.
 
+## Limits
+
+- **Output size & query caps:**
+  - Every `git` invocation runs with a **20-second timeout** and an **8 MiB stdout buffer cap** (`src/git.ts`). If stdout hits the 8 MiB buffer cap, the output captured up to that point is returned; if a command exceeds 20 seconds, it fails with a timeout error.
+  - `git_show` and `git_diff` truncate output at **`max_chars`** (default `30,000`, maximum `200,000`, minimum `1,000`) with a trailing truncation notice. Use `path` or `stat_only: true` to narrow large diffs.
+  - `git_log` caps results at **`limit`** (default `30`, maximum `200`), and `author` / `grep` filters are capped at `200` characters.
+  - `git_blame` returns at most **200 lines per call** (default `50` lines when `end_line` is omitted).
+- **Very large repositories:** `repo_summary` runs `git rev-list --count HEAD` and `git shortlog -sn --no-merges HEAD` across full reachable history, and `changelog` walks the entire `from..to` range without a commit cap. On very large monorepos these commands may hit the 20-second timeout or 8 MiB stdout buffer limit; prefer scoped `git_log` / `git_diff` calls with `path`, `since`, or narrower revision ranges.
+- **Shallow clones:** Tools only see commits present in the local clone. `repo_summary` commit/contributor counts, `git_log`, `git_blame`, and `changelog` stop at the shallow graft boundary, and referencing commits or tags outside the fetched depth fails with a Git error.
+- **Submodules:** Submodule directories are not traversed automatically — `git_diff` and `git_show` in the superproject report only the gitlink commit hash change. To inspect a submodule's own history, pass the submodule's directory as `repo` (it must lie inside an allowed `--root`).
+- **Binary files in `git_show` and `git_diff`:** Both tools pass `--no-ext-diff` and `--no-textconv`, so binary files are never converted by external helpers or dumped as raw bytes; Git prints its standard `Binary files … differ` summary line instead.
+
 ## Tests
 
 `npm test` builds throw-away repositories and checks every tool, option-injection attempts (`--output=…`), path traversal, symlink escape, non-repos, and the built CLI over stdio.
