@@ -37,6 +37,15 @@ Claude Code: `claude mcp add git -- npx -y @aranshayan/mcp-git-insights --root "
 
 All tools are annotated `readOnlyHint`. Commit messages and file contents are untrusted input for the model.
 
+## Limits
+
+- **Time and size per call.** Each git command is stopped after 20 seconds. Output is read up to 8 MB; past that it is cut off without a note, so on very large repositories narrow `git_log` and `changelog` with a path, a ref range or dates.
+- **Patches are capped.** `git_show` and `git_diff` return at most `max_chars` (30,000 by default, 200,000 at most) and say so when they cut. `git_log` returns at most 200 commits per call, `git_blame` at most 200 lines.
+- **Binary files** are not shown. Diffs only report that they changed, because external diff and textconv drivers are turned off on purpose.
+- **Submodules** are not entered. A diff shows the submodule's old and new commit, and other tools see only the parent repository.
+- **Shallow clones** only have the history that was fetched. `git_log`, `git_blame` and `changelog` stop at the shallow boundary, so release notes from an older tag can be incomplete or fail to find the tag.
+- **`changelog`** relies on Conventional Commit prefixes (`feat:`, `fix:` ...). Commits without one are listed under "Other changes", and merge commits are skipped.
+
 ## Tests
 
 `npm test` builds throw-away repositories and checks every tool, option-injection attempts (`--output=…`), path traversal, symlink escape, non-repos, and the built CLI over stdio.
